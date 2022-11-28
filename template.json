@@ -1,0 +1,171 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "jpstorageaccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        },
+        "jpwinserv21Name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "jpwinserv21AdminUserName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "jpwinserv21AdminPassword": {
+            "type": "securestring"
+        },
+        "jpwinserv21WindowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2012-R2-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ]
+        }
+    },
+    "resources": [
+        {
+            "name": "[variables('jpstorageaccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "jpstorageaccount"
+            },
+            "properties": {
+                "accountType": "[parameters('jpstorageaccountType')]"
+            }
+        },
+        {
+            "name": "jpvnet2811",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "jpvnet2811"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('jpvnet2811Prefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('jpvnet2811Subnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('jpvnet2811Subnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('jpvnet2811Subnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('jpvnet2811Subnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('jpwinserv21NicName')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'jpvnet2811')]"
+            ],
+            "tags": {
+                "displayName": "jpwinserv21Nic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('jpwinserv21SubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[parameters('jpwinserv21Name')]",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-06-15",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('jpstorageaccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('jpwinserv21NicName'))]"
+            ],
+            "tags": {
+                "displayName": "jpwinserv21"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('jpwinserv21VmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('jpwinserv21Name')]",
+                    "adminUsername": "[parameters('jpwinserv21AdminUsername')]",
+                    "adminPassword": "[parameters('jpwinserv21AdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('jpwinserv21ImagePublisher')]",
+                        "offer": "[variables('jpwinserv21ImageOffer')]",
+                        "sku": "[parameters('jpwinserv21WindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "jpwinserv21OSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('jpstorageaccountName'), '.blob.core.windows.net/', variables('jpwinserv21StorageAccountContainerName'), '/', variables('jpwinserv21OSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('jpwinserv21NicName'))]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "variables": {
+        "jpstorageaccountName": "[concat('jpstorageaccount', uniqueString(resourceGroup().id))]",
+        "jpvnet2811Prefix": "10.0.0.0/16",
+        "jpvnet2811Subnet1Name": "Subnet-1",
+        "jpvnet2811Subnet1Prefix": "10.0.0.0/24",
+        "jpvnet2811Subnet2Name": "Subnet-2",
+        "jpvnet2811Subnet2Prefix": "10.0.1.0/24",
+        "jpwinserv21ImagePublisher": "MicrosoftWindowsServer",
+        "jpwinserv21ImageOffer": "WindowsServer",
+        "jpwinserv21OSDiskName": "jpwinserv21OSDisk",
+        "jpwinserv21VmSize": "Standard_B1s",
+        "jpwinserv21VnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'jpvnet2811')]",
+        "jpwinserv21SubnetRef": "[concat(variables('jpwinserv21VnetID'), '/subnets/', variables('jpvnet2811Subnet1Name'))]",
+        "jpwinserv21StorageAccountContainerName": "vhds",
+        "jpwinserv21NicName": "[concat(parameters('jpwinserv21Name'), 'NetworkInterface')]"
+    }
+}
